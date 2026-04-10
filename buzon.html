@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Buzón de Sugerencias – Parque Tempisque</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet"/>
+  <style>
+    body { background: #1a4a2e; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .card { background: white; border-radius: 16px; box-shadow: 0 2px 16px rgba(0,0,0,.07); }
+    .fade-in { animation: fadeIn .3s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    textarea:focus { outline: none; border-color: #1a4a2e; }
+    .progress-bar { transition: width .4s ease; }
+    .char-count { font-size: 11px; color: #9ca3af; text-align: right; margin-top: 4px; }
+    .char-count.warn { color: #f59e0b; }
+    .char-count.limit { color: #ef4444; }
+  </style>
+</head>
+<body class="min-h-screen py-8 px-4">
+<div id="root"></div>
+<script type="text/babel">
+  const { useState } = React;
+  const { createClient } = supabase;
+
+  const SUPABASE_URL = 'https://vcdgurkuoqsdvwvpnevr.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjZGd1cmt1b3FzZHZ3dnBuZXZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MjYxNDQsImV4cCI6MjA4ODMwMjE0NH0._fC7LXnggqXyniyOAb2orZj-QHY1_Xrf_-FnKVju9S8';
+  const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const MAX = 1000;
+  const DEPARTAMENTOS = ['-- Seleccione (opcional) --','Administración','Comercial / Ventas','Construcción','Eventos','Finanzas','IT','Marketing','Operaciones','Recursos Humanos','Otro'];
+
+  function CharCount({ val }) {
+    const n = val.length;
+    const cls = n >= MAX ? 'limit' : n >= MAX * 0.85 ? 'warn' : '';
+    return <p className={`char-count ${cls}`}>{n}/{MAX}</p>;
+  }
+
+  function TextArea({ value, onChange, placeholder, rows = 4 }) {
+    return (
+      <div>
+        <textarea
+          rows={rows}
+          value={value}
+          onChange={e => onChange(e.target.value.slice(0, MAX))}
+          placeholder={placeholder}
+          className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-700 transition resize-none"
+          style={{ fontSize: 14 }}
+        />
+        <CharCount val={value} />
+      </div>
+    );
+  }
+
+  const STEPS = [
+    { id: 'bienvenida' },
+    { id: 'p1', label: '💡 Sugerencia de mejora', desc: '¿Qué sugerencia tienes para mejorar Parque Tempisque?', key: 'p1_sugerencia', placeholder: 'Comparte tu idea, puede ser sobre procesos, espacios, comunicación, herramientas…', required: true },
+    { id: 'p2', label: '🔄 Cambios o ajustes', desc: '¿Hay algo que cambiarías o ajustarías para que el trabajo en PT sea mejor o más fluido?', key: 'p2_cambios', placeholder: 'Puede ser algo del día a día, una política, una herramienta, una dinámica de equipo…', required: false },
+    { id: 'p3', label: '🚩 Situación o comportamiento', desc: '¿Has vivido o presenciado alguna situación o comportamiento que vaya en contra de los valores y la cultura de Parque Tempisque?', key: 'p3_situacion', placeholder: 'Este es un espacio seguro y confidencial. Describe lo ocurrido con el detalle que consideres apropiado.', required: false, sensitive: true },
+    { id: 'gracias' },
+  ];
+
+  function App() {
+    const [step, setStep] = useState(0);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState(null);
+    const [form, setForm] = useState({
+      departamento: '',
+      p1_sugerencia: '',
+      p2_cambios: '',
+      p3_situacion: '',
+    });
+
+    const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+    const current = STEPS[step];
+    const totalSteps = STEPS.length - 2; // excluye bienvenida y gracias
+    const progressPct = step === 0 ? 0 : Math.round(((step) / (STEPS.length - 1)) * 100);
+
+    const canContinue = () => {
+      if (current.required && !form[current.key]?.trim()) return false;
+      return true;
+    };
+
+    const submit = async () => {
+      if (!form.p1_sugerencia.trim()) { setError('La primera pregunta es obligatoria.'); return; }
+      setSaving(true); setError(null);
+      const { error: err } = await db.from('buzon_sugerencias').insert([{
+        departamento: form.departamento || null,
+        p1_sugerencia: form.p1_sugerencia.trim(),
+        p2_cambios: form.p2_cambios.trim() || null,
+        p3_situacion: form.p3_situacion.trim() || null,
+      }]);
+      setSaving(false);
+      if (err) { setError('Ocurrió un error al enviar. Por favor intentá de nuevo.'); return; }
+      setStep(4);
+    };
+
+    const btnPrimary = { background: '#1a4a2e', color: 'white', border: 'none', borderRadius: 12, padding: '12px 24px', fontWeight: 700, fontSize: 15, cursor: 'pointer', width: '100%' };
+    const btnSecondary = { background: 'white', color: '#6b7280', border: '2px solid #e5e7eb', borderRadius: 12, padding: '11px 20px', fontWeight: 600, fontSize: 14, cursor: 'pointer' };
+
+    return (
+      <div className="max-w-lg mx-auto">
+        {/* Header */}
+        <div className="text-center mb-6">
+          <img src="https://vr506.com/assets/logoPT.png" alt="Parque Tempisque" className="mx-auto mb-3" style={{width:60,height:60,objectFit:'contain'}}/>
+          <h1 className="text-2xl font-bold" style={{color:'#1a4a2e'}}>Parque Tempisque</h1>
+          <p className="text-sm text-gray-500 mt-1">Recursos Humanos · Buzón de Sugerencias</p>
+        </div>
+
+        {/* Progress */}
+        {step > 0 && step < 4 && (
+          <div className="w-full bg-gray-100 rounded-full h-1.5 mb-5">
+            <div className="progress-bar h-1.5 rounded-full" style={{width: progressPct+'%', background:'#1a4a2e'}}/>
+          </div>
+        )}
+
+        <div className="card p-6 fade-in">
+
+          {/* ── BIENVENIDA ── */}
+          {step === 0 && (
+            <div className="text-center py-2">
+              <div className="text-5xl mb-4">📬</div>
+              <h2 className="text-xl font-bold text-gray-800 mb-3">Buzón de Sugerencias</h2>
+              <p className="text-gray-600 mb-2">Este es un espacio <strong>abierto y anónimo</strong> para compartir ideas, sugerencias o inquietudes.</p>
+              <p className="text-gray-500 text-sm mb-6">Queremos escucharte. Tu voz ayuda a construir un mejor lugar para trabajar.</p>
+              <div className="rounded-xl p-4 mb-6 text-left" style={{background:'#e8f5ee'}}>
+                <p className="text-sm font-semibold mb-2" style={{color:'#1a4a2e'}}>📌 Importante</p>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>✅ Tu respuesta es completamente anónima</li>
+                  <li>✅ No se registra ningún dato personal</li>
+                  <li>✅ Solo el equipo de RR.HH. accede a las respuestas</li>
+                </ul>
+              </div>
+              {/* Departamento opcional */}
+              <div className="text-left mb-6">
+                <label className="text-sm font-semibold text-gray-700 block mb-1">Departamento (opcional)</label>
+                <select value={form.departamento} onChange={e => set('departamento', e.target.value === DEPARTAMENTOS[0] ? '' : e.target.value)}
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-700 focus:outline-none transition" style={{fontSize:14}}>
+                  {DEPARTAMENTOS.map(d => <option key={d}>{d}</option>)}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">Indicar el departamento es voluntario y ayuda a contextualizar mejor las sugerencias.</p>
+              </div>
+              <button onClick={() => setStep(1)} style={btnPrimary}>Comenzar →</button>
+            </div>
+          )}
+
+          {/* ── PREGUNTAS 1-3 ── */}
+          {step >= 1 && step <= 3 && (() => {
+            const q = STEPS[step];
+            return (
+              <div className="fade-in">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:'#e8f5ee',color:'#1a4a2e'}}>Pregunta {step} de {totalSteps}</span>
+                  {!q.required && <span className="text-xs text-gray-400">Opcional</span>}
+                </div>
+                <h2 className="text-base font-bold text-gray-800 mb-1 mt-2">{q.label}</h2>
+                <p className="text-sm text-gray-500 mb-4">{q.desc}</p>
+
+                {q.sensitive && (
+                  <div className="rounded-xl p-3 mb-4 flex gap-2" style={{background:'#fef9c3'}}>
+                    <span>🔒</span>
+                    <p className="text-xs text-yellow-800">Esta pregunta es especialmente sensible. Tu respuesta es completamente confidencial y solo será revisada por la dirección de RR.HH.</p>
+                  </div>
+                )}
+
+                <TextArea value={form[q.key]} onChange={v => set(q.key, v)} placeholder={q.placeholder}/>
+
+                {error && step === 1 && <p className="text-red-500 text-sm mt-2">{error}</p>}
+
+                <div className="flex gap-3 mt-5">
+                  <button onClick={() => setStep(step - 1)} style={btnSecondary}>← Atrás</button>
+                  <div style={{flex:1}}>
+                    {step < 3
+                      ? <button onClick={() => { if(canContinue()) setStep(step+1); else setError(null); }}
+                          style={{...btnPrimary, opacity: q.required && !form[q.key]?.trim() ? 0.45 : 1}}
+                          disabled={q.required && !form[q.key]?.trim()}>
+                          {q.required && !form[q.key]?.trim() ? 'Escribe tu respuesta para continuar' : 'Continuar →'}
+                        </button>
+                      : <button onClick={submit} disabled={saving}
+                          style={{...btnPrimary, opacity: saving ? 0.6 : 1}}>
+                          {saving ? 'Enviando…' : 'Enviar sugerencias ✓'}
+                        </button>
+                    }
+                  </div>
+                </div>
+                {!q.required && step < 3 && (
+                  <button onClick={() => setStep(step + 1)} className="w-full mt-2 text-sm text-gray-400 hover:text-gray-600 transition" style={{background:'none',border:'none',cursor:'pointer'}}>
+                    Saltar esta pregunta →
+                  </button>
+                )}
+                {!q.required && step === 3 && (
+                  <button onClick={submit} disabled={saving} className="w-full mt-2 text-sm text-gray-400 hover:text-gray-600 transition" style={{background:'none',border:'none',cursor:'pointer'}}>
+                    {saving ? 'Enviando…' : 'Enviar sin responder esta pregunta →'}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ── GRACIAS ── */}
+          {step === 4 && (
+            <div className="text-center py-8 fade-in">
+              <div className="text-6xl mb-4">🙌</div>
+              <h2 className="text-2xl font-bold mb-3" style={{color:'#1a4a2e'}}>¡Gracias por tu aporte!</h2>
+              <p className="text-gray-600 mb-2">Tu mensaje fue recibido correctamente.</p>
+              <p className="text-gray-500 text-sm mb-6">El equipo de Recursos Humanos revisará tu sugerencia. Recuerda que tu identidad es completamente anónima.</p>
+              <div className="rounded-xl p-4" style={{background:'#e8f5ee'}}>
+                <p className="text-sm font-semibold" style={{color:'#1a4a2e'}}>💚 Juntos construimos un mejor Parque Tempisque</p>
+              </div>
+            </div>
+          )}
+
+        </div>
+        <p className="text-center text-xs text-gray-400 mt-5">Buzón anónimo · Recursos Humanos · Parque Tempisque · {new Date().getFullYear()}</p>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

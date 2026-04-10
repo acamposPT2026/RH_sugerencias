@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard Buzón – Parque Tempisque RR.HH.</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet"/>
+  <style>
+    body { background: #1a4a2e; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .card { background: white; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,.07); }
+    .fade-in { animation: fadeIn .3s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:translateY(0) } }
+    table { border-collapse: collapse; width: 100%; }
+    th { background: #e8f5ee; color: #1a4a2e; font-weight: 700; text-align: left; padding: 10px 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+    td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f0fdf4; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #a8d5b5; border-radius: 3px; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+    .tag-p1 { background:#e8f5ee; color:#1a4a2e; }
+    .tag-p2 { background:#e0e7ff; color:#3730a3; }
+    .tag-p3 { background:#fef9c3; color:#854d0e; }
+    .tag-dept { background:#f3f4f6; color:#374151; }
+  </style>
+</head>
+<body class="min-h-screen">
+<div id="root"></div>
+<script type="text/babel">
+  const { useState, useEffect, useMemo } = React;
+  const { createClient } = supabase;
+
+  const SUPABASE_URL = 'https://vcdgurkuoqsdvwvpnevr.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjZGd1cmt1b3FzZHZ3dnBuZXZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MjYxNDQsImV4cCI6MjA4ODMwMjE0NH0._fC7LXnggqXyniyOAb2orZj-QHY1_Xrf_-FnKVju9S8';
+  const ADMIN_PASSWORD = 'TempisqueRRHH2026';
+  const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const GREEN = '#1a4a2e';
+
+  function Login({ onLogin }) {
+    const [pw, setPw] = useState('');
+    const [err, setErr] = useState(false);
+    const submit = () => {
+      if (pw === ADMIN_PASSWORD) onLogin();
+      else { setErr(true); setTimeout(() => setErr(false), 2000); }
+    };
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="card p-8 w-full max-w-sm text-center">
+          <img src="https://vr506.com/assets/logoPT.png" alt="PT" className="mx-auto mb-4" style={{width:64,height:64,objectFit:'contain'}}/>
+          <h1 className="text-xl font-bold mb-1" style={{color:GREEN}}>Parque Tempisque</h1>
+          <p className="text-sm text-gray-500 mb-6">RR.HH. · Buzón de Sugerencias</p>
+          <input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()}
+            placeholder="Contraseña"
+            className={`w-full border-2 rounded-xl px-4 py-3 mb-3 focus:outline-none text-center transition ${err?'border-red-400':'border-gray-200'}`}/>
+          {err && <p className="text-red-500 text-sm mb-2">Contraseña incorrecta</p>}
+          <button onClick={submit} className="w-full py-3 text-white font-bold rounded-xl transition" style={{background:GREEN}}>
+            Ingresar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function KpiCard({ icon, title, value, sub, color }) {
+    return (
+      <div className="card p-5" style={{borderLeft:`4px solid ${color||GREEN}`}}>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">{title}</p>
+            <p className="text-3xl font-bold text-gray-800">{value}</p>
+            {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+          </div>
+          <span className="text-3xl">{icon}</span>
+        </div>
+      </div>
+    );
+  }
+
+  function EntryCard({ row, idx }) {
+    const [open, setOpen] = useState(false);
+    const date = new Date(row.created_at).toLocaleDateString('es-CR', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return (
+      <div className="card mb-3 overflow-hidden">
+        <div onClick={() => setOpen(o=>!o)} className="p-4 cursor-pointer flex items-center justify-between gap-4" style={{background: open ? '#f0fdf4' : 'white'}}>
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <span className="text-2xl flex-shrink-0">{row.p3_situacion ? '🚩' : '💡'}</span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-800 truncate">{row.p1_sugerencia || '(sin sugerencia)'}</p>
+              <div className="flex gap-2 mt-1 flex-wrap">
+                <span className="text-xs text-gray-400">{date}</span>
+                {row.departamento && <span className="badge tag-dept">{row.departamento}</span>}
+                {row.p2_cambios && <span className="badge tag-p2">P2 ✓</span>}
+                {row.p3_situacion && <span className="badge tag-p3">⚠️ P3</span>}
+              </div>
+            </div>
+          </div>
+          <span className="text-gray-400 flex-shrink-0" style={{fontSize:18}}>{open ? '▲' : '▼'}</span>
+        </div>
+        {open && (
+          <div className="px-4 pb-4 fade-in border-t border-gray-100">
+            <div className="mt-3 space-y-3">
+              <div className="rounded-xl p-3" style={{background:'#e8f5ee'}}>
+                <p className="text-xs font-bold mb-1" style={{color:GREEN}}>💡 Sugerencia de mejora</p>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{row.p1_sugerencia || '—'}</p>
+              </div>
+              {row.p2_cambios && (
+                <div className="rounded-xl p-3" style={{background:'#e0e7ff'}}>
+                  <p className="text-xs font-bold mb-1" style={{color:'#3730a3'}}>🔄 Cambios o ajustes</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{row.p2_cambios}</p>
+                </div>
+              )}
+              {row.p3_situacion && (
+                <div className="rounded-xl p-3" style={{background:'#fef9c3'}}>
+                  <p className="text-xs font-bold mb-1" style={{color:'#854d0e'}}>🚩 Situación o comportamiento</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{row.p3_situacion}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function Dashboard() {
+    const [rows, setRows] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [tab, setTab] = useState('resumen');
+    const [filterDept, setFilterDept] = useState('Todos');
+    const [filterType, setFilterType] = useState('Todos');
+    const [search, setSearch] = useState('');
+
+    const fetchData = async () => {
+      setLoading(true);
+      const { data } = await db.from('buzon_sugerencias').select('*').order('created_at', { ascending: false });
+      setRows(data || []);
+      setLoading(false);
+    };
+    useEffect(() => { fetchData(); }, []);
+
+    const depts = useMemo(() => ['Todos', ...Array.from(new Set(rows.map(r=>r.departamento).filter(Boolean))).sort()], [rows]);
+
+    const filtered = useMemo(() => rows.filter(r => {
+      if (filterDept !== 'Todos' && r.departamento !== filterDept) return false;
+      if (filterType === 'Con P3' && !r.p3_situacion) return false;
+      if (filterType === 'Sin P3' && r.p3_situacion) return false;
+      if (search && !Object.values(r).join(' ').toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    }), [rows, filterDept, filterType, search]);
+
+    if (loading) return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <img src="https://vr506.com/assets/logoPT.png" alt="PT" className="mx-auto mb-3 animate-pulse" style={{width:56,height:56,objectFit:'contain'}}/>
+          <p className="font-semibold" style={{color:GREEN}}>Cargando datos…</p>
+        </div>
+      </div>
+    );
+
+    const n = rows.length;
+    const conP1 = rows.filter(r=>r.p1_sugerencia).length;
+    const conP2 = rows.filter(r=>r.p2_cambios).length;
+    const conP3 = rows.filter(r=>r.p3_situacion).length;
+
+    // Distribución por departamento
+    const deptDist = depts.filter(d=>d!=='Todos').map(d=>({dept:d, count:rows.filter(r=>r.departamento===d).length})).sort((a,b)=>b.count-a.count);
+    const sinDept = rows.filter(r=>!r.departamento).length;
+
+    return (
+      <div className="min-h-screen">
+        {/* Header */}
+        <div className="text-white px-6 py-4 flex items-center justify-between" style={{background:GREEN}}>
+          <div className="flex items-center gap-3">
+            <img src="https://vr506.com/assets/logoPT.png" alt="PT" style={{width:44,height:44,objectFit:'contain'}}/>
+            <div>
+              <h1 className="font-bold text-lg leading-tight">Parque Tempisque</h1>
+              <p className="text-xs" style={{color:'#a8d5b5'}}>RR.HH. · Buzón de Sugerencias</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm" style={{color:'#a8d5b5'}}>{n} entrada{n!==1?'s':''}</span>
+            <button onClick={fetchData} className="text-white text-xs px-3 py-1.5 rounded-lg transition" style={{background:'#2d7a45'}}>↻ Actualizar</button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white border-b border-gray-100 px-6">
+          <div className="flex gap-1">
+            {[['resumen','📊 Resumen'],['entradas','📬 Entradas'],['alertas','🚩 Alertas']].map(([id,label])=>(
+              <button key={id} onClick={()=>setTab(id)}
+                className="px-4 py-3 text-sm font-semibold border-b-2 transition"
+                style={{borderBottomColor:tab===id?GREEN:'transparent',color:tab===id?GREEN:'#6b7280'}}>
+                {label}{id==='alertas'&&conP3>0&&<span className="ml-1 px-1.5 py-0.5 rounded-full text-white text-xs" style={{background:'#ef4444'}}>{conP3}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-6 max-w-5xl mx-auto">
+
+          {/* ── RESUMEN ── */}
+          {tab==='resumen'&&(
+            <div className="fade-in">
+              {n===0?(
+                <div className="text-center py-20 text-gray-400">
+                  <div className="text-5xl mb-4">📭</div>
+                  <p className="text-lg font-semibold">Aún no hay entradas en el buzón</p>
+                  <p className="text-sm mt-2">Compartí el enlace con los empleados.</p>
+                </div>
+              ):(
+                <>
+                  <div className="grid gap-4 mb-6" style={{gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))'}}>
+                    <KpiCard icon="📬" title="Total entradas" value={n}/>
+                    <KpiCard icon="💡" title="Con sugerencia" value={conP1} sub={`${Math.round(conP1/n*100)}% del total`} color="#2d7a45"/>
+                    <KpiCard icon="🔄" title="Con cambios" value={conP2} sub={`${Math.round(conP2/n*100)}% del total`} color="#3730a3"/>
+                    <KpiCard icon="🚩" title="Con situación" value={conP3} sub={`${Math.round(conP3/n*100)}% del total`} color={conP3>0?"#ef4444":"#9ca3af"}/>
+                  </div>
+
+                  {/* Distribución por departamento */}
+                  {deptDist.length>0&&(
+                    <div className="card p-5 mb-6">
+                      <h3 className="font-bold text-gray-700 mb-4">📁 Entradas por departamento</h3>
+                      <div className="space-y-2">
+                        {deptDist.map(d=>(
+                          <div key={d.dept} className="flex items-center gap-3">
+                            <span className="text-sm text-gray-600 w-40 truncate">{d.dept}</span>
+                            <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                              <div className="h-5 rounded-full flex items-center justify-end pr-2"
+                                style={{width:`${Math.max((d.count/n)*100,4)}%`,background:GREEN}}>
+                                <span className="text-white text-xs font-bold">{d.count}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {sinDept>0&&(
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm text-gray-400 w-40">Sin indicar</span>
+                            <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                              <div className="h-5 rounded-full flex items-center justify-end pr-2"
+                                style={{width:`${Math.max((sinDept/n)*100,4)}%`,background:'#9ca3af'}}>
+                                <span className="text-white text-xs font-bold">{sinDept}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Últimas 5 entradas */}
+                  <div className="card p-5">
+                    <h3 className="font-bold text-gray-700 mb-4">🕐 Últimas entradas</h3>
+                    {rows.slice(0,5).map((r,i)=><EntryCard key={r.id} row={r} idx={i}/>)}
+                    {n>5&&<p className="text-xs text-center text-gray-400 mt-2">Ver todas en la pestaña "Entradas"</p>}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── ENTRADAS ── */}
+          {tab==='entradas'&&(
+            <div className="fade-in">
+              {/* Filtros */}
+              <div className="flex gap-3 flex-wrap mb-4">
+                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Buscar en respuestas…"
+                  className="border-2 border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none flex-1 min-w-48" style={{minWidth:200}}/>
+                <select value={filterDept} onChange={e=>setFilterDept(e.target.value)}
+                  className="border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
+                  {depts.map(d=><option key={d}>{d}</option>)}
+                </select>
+                <select value={filterType} onChange={e=>setFilterType(e.target.value)}
+                  className="border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
+                  {['Todos','Con P3','Sin P3'].map(t=><option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <p className="text-xs text-gray-400 mb-3">{filtered.length} entrada{filtered.length!==1?'s':''} {filtered.length!==n?`de ${n}`:'en total'}</p>
+              {filtered.length===0
+                ? <div className="text-center py-12 text-gray-400"><div className="text-4xl mb-3">🔍</div><p>No hay entradas que coincidan</p></div>
+                : filtered.map((r,i)=><EntryCard key={r.id} row={r} idx={i}/>)
+              }
+            </div>
+          )}
+
+          {/* ── ALERTAS ── */}
+          {tab==='alertas'&&(
+            <div className="fade-in">
+              <div className="rounded-xl p-4 mb-4 flex gap-3" style={{background:'#fef9c3'}}>
+                <span className="text-xl">⚠️</span>
+                <div>
+                  <p className="text-sm font-bold" style={{color:'#854d0e'}}>Entradas con situación reportada (P3)</p>
+                  <p className="text-xs text-yellow-700 mt-0.5">Estas entradas contienen reportes de situaciones o comportamientos contrarios a los valores de PT. Requieren atención prioritaria.</p>
+                </div>
+              </div>
+              {conP3===0
+                ? <div className="text-center py-12 text-gray-400"><div className="text-4xl mb-3">✅</div><p className="font-semibold">No hay alertas registradas</p></div>
+                : rows.filter(r=>r.p3_situacion).map((r,i)=><EntryCard key={r.id} row={r} idx={i}/>)
+              }
+            </div>
+          )}
+
+        </div>
+      </div>
+    );
+  }
+
+  function App() {
+    const [auth, setAuth] = useState(false);
+    if (!auth) return <Login onLogin={() => setAuth(true)}/>;
+    return <Dashboard/>;
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
